@@ -2,6 +2,7 @@ package storedcounter
 
 import (
 	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/ipfs/go-datastore"
@@ -43,4 +44,32 @@ func (sc *StoredCounter) Next() (uint64, error) {
 	size := binary.PutUvarint(buf, next)
 
 	return next, sc.ds.Put(sc.name, buf[:size])
+}
+
+// Put ...
+func (sc *StoredCounter) Put(count uint64) error {
+	if count == 0 {
+		return nil
+	}
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+	has, err := sc.ds.Has(sc.name)
+	if err != nil {
+		return err
+	}
+	if !has {
+		return fmt.Errorf("data store not found key :%s", sc.name)
+	}
+	curBytes, err := sc.ds.Get(sc.name)
+	if err != nil {
+		return err
+	}
+	cur, _ := binary.Uvarint(curBytes)
+	if count > cur {
+		buf := make([]byte, binary.MaxVarintLen64)
+		size := binary.PutUvarint(buf, count)
+		return sc.ds.Put(sc.name, buf[:size])
+	}
+
+	return fmt.Errorf("current sectors numer: %d more than set count: %d", cur, count)
 }
